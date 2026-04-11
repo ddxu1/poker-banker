@@ -162,6 +162,7 @@ export default function GameView() {
             title={`${activePlayer.name} · ${sheet.type === 'buyin' ? 'Buy In' : 'Cash Out'}`}
             onConfirm={handleConfirm}
             onCancel={() => setSheet(null)}
+            allowZero={sheet.type === 'buyout'}
           />
         )}
       </BottomSheet>

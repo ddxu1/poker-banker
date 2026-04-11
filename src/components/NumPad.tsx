@@ -6,9 +6,10 @@ interface NumPadProps {
   onConfirm: (amountCents: number) => void
   onCancel: () => void
   title: string
+  allowZero?: boolean
 }
 
-export default function NumPad({ presets, onConfirm, onCancel, title }: NumPadProps) {
+export default function NumPad({ presets, onConfirm, onCancel, title, allowZero = false }: NumPadProps) {
   const [input, setInput] = useState('')
 
   const amountCents = input ? Math.round(parseFloat(input) * 100) : 0
@@ -86,8 +87,8 @@ export default function NumPad({ presets, onConfirm, onCancel, title }: NumPadPr
           Cancel
         </button>
         <button
-          onClick={() => amountCents > 0 && onConfirm(amountCents)}
-          disabled={amountCents <= 0}
+          onClick={() => (allowZero ? amountCents >= 0 : amountCents > 0) && onConfirm(amountCents)}
+          disabled={allowZero ? false : amountCents <= 0}
           className="py-4 rounded-xl bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-lg transition-colors active:bg-green-500"
         >
           Confirm
