@@ -6,10 +6,12 @@ import NumPad from '../components/NumPad'
 import type { PlayerID } from '../core/types'
 
 type SheetMode = { playerId: PlayerID; type: 'buyin' | 'buyout' } | null
+type EditMode = { txId: string; txType: 'buyin' | 'buyout'; playerName: string; currentCents: number } | null
 
 export default function GameView() {
-  const { session, addBuyin, addBuyout, addPlayer, endGame } = useGameStore()
+  const { session, addBuyin, addBuyout, addPlayer, editTransaction, removeTransaction, endGame } = useGameStore()
   const [sheet, setSheet] = useState<SheetMode>(null)
+  const [editSheet, setEditSheet] = useState<EditMode>(null)
   const [confirmEnd, setConfirmEnd] = useState(false)
   const [addingPlayer, setAddingPlayer] = useState(false)
   const [newPlayerName, setNewPlayerName] = useState('')
@@ -82,7 +84,7 @@ export default function GameView() {
                   {ledger.totalInCents === 0 ? (
                     <p className="text-gray-600 font-bold text-lg">—</p>
                   ) : (
-                    <p className={`font-bold text-xl ${isUp ? 'text-green-400' : isDown ? 'text-red-400' : 'text-gray-400'}`}>
+                    <p className={`font-bold text-xl ${isUp ? 'text-emerald-400' : isDown ? 'text-rose-400' : 'text-gray-400'}`}>
                       {isUp ? '+' : ''}{formatMoney(ledger.netCents)}
                     </p>
                   )}
@@ -92,7 +94,7 @@ export default function GameView() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setSheet({ playerId: ledger.playerId, type: 'buyin' })}
-                  className="py-3 rounded-xl bg-blue-600/20 border border-blue-600/40 text-blue-400 font-semibold text-sm active:bg-blue-600/30"
+                  className="py-3 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-400 font-semibold text-sm active:bg-violet-600/30"
                 >
                   + Buy In
                 </button>
@@ -132,20 +134,27 @@ export default function GameView() {
                   const isBuyin = tx.type === 'buyin'
                   const time = new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   return (
-                    <div key={tx.id} className="flex items-center justify-between bg-gray-800/40 rounded-xl px-3 py-2.5">
+                    <button
+                      key={tx.id}
+                      onClick={() => setEditSheet({ txId: tx.id, txType: tx.type, playerName: tx.playerName, currentCents: tx.amountCents })}
+                      className="flex items-center justify-between bg-gray-800/40 rounded-xl px-3 py-2.5 w-full text-left active:bg-gray-700/60"
+                    >
                       <div className="flex items-center gap-2.5">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isBuyin ? 'bg-blue-900/50 text-blue-400' : 'bg-gray-700 text-gray-400'}`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isBuyin ? 'bg-violet-900/50 text-violet-400' : 'bg-gray-700 text-gray-400'}`}>
                           {isBuyin ? 'BUY IN' : 'CASH OUT'}
                         </span>
                         <span className="text-gray-300 text-sm">{tx.playerName}</span>
                       </div>
-                      <div className="text-right">
-                        <span className={`font-semibold text-sm ${isBuyin ? 'text-blue-400' : 'text-gray-300'}`}>
-                          {formatMoney(tx.amountCents)}
-                        </span>
-                        <p className="text-gray-600 text-xs">{time}</p>
+                      <div className="text-right flex items-center gap-2">
+                        <div>
+                          <span className={`font-semibold text-sm ${isBuyin ? 'text-violet-400' : 'text-gray-300'}`}>
+                            {formatMoney(tx.amountCents)}
+                          </span>
+                          <p className="text-gray-600 text-xs">{time}</p>
+                        </div>
+                        <span className="text-gray-600 text-xs">✎</span>
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -177,7 +186,7 @@ export default function GameView() {
             onChange={(e) => setNewPlayerName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer()}
             placeholder="Player name"
-            className="bg-gray-800 text-white placeholder-gray-600 rounded-xl px-4 py-4 text-lg outline-none focus:ring-2 focus:ring-green-600"
+            className="bg-gray-800 text-white placeholder-gray-600 rounded-xl px-4 py-4 text-lg outline-none focus:ring-2 focus:ring-violet-500"
           />
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -189,7 +198,7 @@ export default function GameView() {
             <button
               onClick={handleAddPlayer}
               disabled={!newPlayerName.trim()}
-              className="py-4 rounded-xl bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold active:bg-green-500"
+              className="py-4 rounded-xl bg-violet-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold active:bg-violet-500"
             >
               Add
             </button>
@@ -197,10 +206,36 @@ export default function GameView() {
         </div>
       </BottomSheet>
 
+      {/* Edit transaction sheet */}
+      <BottomSheet open={!!editSheet} onClose={() => setEditSheet(null)}>
+        {editSheet && (
+          <div className="flex flex-col gap-4">
+            <p className="text-center text-gray-400 text-sm font-medium uppercase tracking-widest">
+              Edit {editSheet.txType === 'buyin' ? 'Buy In' : 'Cash Out'} · {editSheet.playerName}
+            </p>
+            <NumPad
+              presets={BUYIN_PRESETS_CENTS}
+              title={`Currently ${formatMoney(editSheet.currentCents)}`}
+              onConfirm={(newAmount) => {
+                editTransaction(editSheet.txId, newAmount)
+                setEditSheet(null)
+              }}
+              onCancel={() => setEditSheet(null)}
+              allowZero={editSheet.txType === 'buyout'}
+            />
+            <button
+              onClick={() => { removeTransaction(editSheet.txId); setEditSheet(null) }}
+              className="w-full py-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 font-semibold text-sm"
+            >
+              Remove Transaction
+            </button>
+          </div>
+        )}
+      </BottomSheet>
+
       {/* End game confirmation */}
       <BottomSheet open={confirmEnd} onClose={() => setConfirmEnd(false)}>
         <div className="text-center px-2">
-          <div className="text-4xl mb-3">🏁</div>
           <h3 className="text-white font-bold text-2xl mb-2">End the game?</h3>
           <p className="text-gray-400 text-sm mb-6">
             Make sure all players have cashed out before settling up.
@@ -214,7 +249,7 @@ export default function GameView() {
             </button>
             <button
               onClick={() => { setConfirmEnd(false); endGame() }}
-              className="py-4 rounded-xl bg-red-600 text-white font-bold active:bg-red-500"
+              className="py-4 rounded-xl bg-violet-600 text-white font-bold active:bg-violet-500"
             >
               Settle Up
             </button>

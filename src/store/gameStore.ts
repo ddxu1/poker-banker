@@ -11,6 +11,7 @@ interface GameStore {
   session: GameSession | null
   settlements: Settlement[]
   paidMap: Record<string, boolean>
+  history: GameSession[]
 
   // Lobby actions
   startSession: (playerNames: string[]) => void
@@ -20,6 +21,8 @@ interface GameStore {
   addPlayer: (name: string) => void
   addBuyin: (playerId: PlayerID, amountCents: number) => void
   addBuyout: (playerId: PlayerID, amountCents: number) => void
+  editTransaction: (txId: string, newAmountCents: number) => void
+  removeTransaction: (txId: string) => void
   endGame: () => void
 
   // Settlement actions
@@ -34,6 +37,7 @@ export const useGameStore = create<GameStore>()(
       session: null,
       settlements: [],
       paidMap: {},
+      history: [],
 
       startSession: (playerNames) => {
         const players: Player[] = playerNames.map((name) => ({
@@ -95,6 +99,30 @@ export const useGameStore = create<GameStore>()(
         })
       },
 
+      editTransaction: (txId, newAmountCents) => {
+        const { session } = get()
+        if (!session) return
+        set({
+          session: {
+            ...session,
+            transactions: session.transactions.map((t) =>
+              t.id === txId ? { ...t, amountCents: newAmountCents } : t
+            ),
+          },
+        })
+      },
+
+      removeTransaction: (txId) => {
+        const { session } = get()
+        if (!session) return
+        set({
+          session: {
+            ...session,
+            transactions: session.transactions.filter((t) => t.id !== txId),
+          },
+        })
+      },
+
       endGame: () => {
         const { session } = get()
         if (!session) return
@@ -122,7 +150,12 @@ export const useGameStore = create<GameStore>()(
       },
 
       newGame: () => {
-        set({ session: null, settlements: [], paidMap: {}, view: 'lobby' })
+        const { session, history } = get()
+        const updatedHistory =
+          session?.status === 'settled'
+            ? [session, ...history].slice(0, 10)
+            : history
+        set({ session: null, settlements: [], paidMap: {}, view: 'lobby', history: updatedHistory })
       },
     }),
     {
