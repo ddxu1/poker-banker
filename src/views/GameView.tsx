@@ -15,21 +15,12 @@ export default function GameView() {
   const [confirmEnd, setConfirmEnd] = useState(false)
   const [addingPlayer, setAddingPlayer] = useState(false)
   const [newPlayerName, setNewPlayerName] = useState('')
-  const [showLedger, setShowLedger] = useState(false)
   const newPlayerRef = useRef<HTMLInputElement>(null)
 
   if (!session) return null
 
   const ledgers = getLedgers(session)
   const totalPotCents = ledgers.reduce((s, l) => s + l.totalInCents, 0)
-
-  // Chronological transaction log, newest first
-  const txLog = [...session.transactions]
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .map((tx) => {
-      const player = session.players.find((p) => p.id === tx.playerId)
-      return { ...tx, playerName: player?.name ?? 'Unknown' }
-    })
 
   function handleConfirm(amountCents: number) {
     if (!sheet) return
@@ -65,10 +56,13 @@ export default function GameView() {
       </div>
 
       <div className="flex-1 px-4 flex flex-col gap-3 pb-6">
-        {/* Player cards */}
+        {/* Player cards with inline transactions */}
         {ledgers.map((ledger) => {
           const isUp = ledger.netCents > 0
           const isDown = ledger.netCents < 0
+          const playerTxs = [...session.transactions]
+            .filter((t) => t.playerId === ledger.playerId)
+            .sort((a, b) => b.timestamp - a.timestamp)
 
           return (
             <div key={ledger.playerId} className="bg-gray-800/60 rounded-2xl p-4">
@@ -90,6 +84,34 @@ export default function GameView() {
                   )}
                 </div>
               </div>
+
+              {/* Inline transaction history */}
+              {playerTxs.length > 0 && (
+                <div className="flex flex-col gap-1 mb-3">
+                  {playerTxs.map((tx) => {
+                    const isBuyin = tx.type === 'buyin'
+                    const time = new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    return (
+                      <button
+                        key={tx.id}
+                        onClick={() => setEditSheet({ txId: tx.id, txType: tx.type, playerName: ledger.name, currentCents: tx.amountCents })}
+                        className="flex items-center justify-between bg-gray-900/50 rounded-lg px-3 py-2 w-full text-left active:bg-gray-700/60"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isBuyin ? 'bg-violet-900/50 text-violet-400' : 'bg-gray-700 text-gray-400'}`}>
+                            {isBuyin ? 'IN' : 'OUT'}
+                          </span>
+                          <span className={`font-semibold text-sm ${isBuyin ? 'text-violet-400' : 'text-gray-300'}`}>
+                            {formatMoney(tx.amountCents)}
+                          </span>
+                          <span className="text-gray-600 text-xs">{time}</span>
+                        </div>
+                        <span className="text-gray-600 text-xs">✎</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -116,51 +138,6 @@ export default function GameView() {
         >
           + Add Player
         </button>
-
-        {/* Transaction ledger */}
-        {txLog.length > 0 && (
-          <div className="mt-2">
-            <button
-              onClick={() => setShowLedger((v) => !v)}
-              className="w-full flex items-center justify-between py-2 text-gray-500 text-xs font-semibold uppercase tracking-widest"
-            >
-              <span>Transaction History · {txLog.length}</span>
-              <span>{showLedger ? '▲' : '▼'}</span>
-            </button>
-
-            {showLedger && (
-              <div className="flex flex-col gap-1 mt-1">
-                {txLog.map((tx) => {
-                  const isBuyin = tx.type === 'buyin'
-                  const time = new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  return (
-                    <button
-                      key={tx.id}
-                      onClick={() => setEditSheet({ txId: tx.id, txType: tx.type, playerName: tx.playerName, currentCents: tx.amountCents })}
-                      className="flex items-center justify-between bg-gray-800/40 rounded-xl px-3 py-2.5 w-full text-left active:bg-gray-700/60"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isBuyin ? 'bg-violet-900/50 text-violet-400' : 'bg-gray-700 text-gray-400'}`}>
-                          {isBuyin ? 'BUY IN' : 'CASH OUT'}
-                        </span>
-                        <span className="text-gray-300 text-sm">{tx.playerName}</span>
-                      </div>
-                      <div className="text-right flex items-center gap-2">
-                        <div>
-                          <span className={`font-semibold text-sm ${isBuyin ? 'text-violet-400' : 'text-gray-300'}`}>
-                            {formatMoney(tx.amountCents)}
-                          </span>
-                          <p className="text-gray-600 text-xs">{time}</p>
-                        </div>
-                        <span className="text-gray-600 text-xs">✎</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* NumPad sheet */}
