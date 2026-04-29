@@ -1,5 +1,5 @@
 export type PlayerID = string
-export type View = 'lobby' | 'game' | 'settlement'
+export type View = 'home' | 'lobby' | 'game' | 'settlement'
 
 export interface Player {
   id: PlayerID
@@ -21,6 +21,7 @@ export interface GameSession {
   transactions: Transaction[]
   buyinPresets: number[] // in cents
   status: 'active' | 'settled'
+  paidMap?: Record<string, boolean> // keyed by transfer index
 }
 
 // Derived — never stored

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { GameSession, Player, PlayerID, Settlement, View } from '../core/types'
 import { computeSettlements } from '../core/settlement'
+import { buildSeedHistory } from '../dev/seed'
 
 export const BUYIN_PRESETS_CENTS = [1000, 2000, 5000, 10000, 20000, 50000] // $10,$20,$50,$100,$200,$500
 
@@ -13,31 +14,46 @@ interface GameStore {
   paidMap: Record<string, boolean>
   history: GameSession[]
 
+  // Navigation
+  goToLobby: () => void
+  goHome: () => void
+
   // Lobby actions
   startSession: (playerNames: string[]) => void
   resumeSession: () => void
 
   // Game actions
   addPlayer: (name: string) => void
+  removePlayer: (playerId: PlayerID) => void
   addBuyin: (playerId: PlayerID, amountCents: number) => void
   addBuyout: (playerId: PlayerID, amountCents: number) => void
   editTransaction: (txId: string, newAmountCents: number) => void
   removeTransaction: (txId: string) => void
+  setSessionDate: (timestamp: number) => void
+  setHistoryDate: (sessionId: string, timestamp: number) => void
   endGame: () => void
 
   // Settlement actions
   togglePaid: (index: number) => void
+  togglePaidInHistory: (sessionId: string, index: number) => void
   newGame: () => void
+
+  // Dev / playground
+  seedDemoHistory: () => void
+  clearAll: () => void
 }
 
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
-      view: 'lobby',
+      view: 'home',
       session: null,
       settlements: [],
       paidMap: {},
       history: [],
+
+      goToLobby: () => set({ view: 'lobby' }),
+      goHome: () => set({ view: 'home' }),
 
       startSession: (playerNames) => {
         const players: Player[] = playerNames.map((name) => ({
@@ -69,6 +85,18 @@ export const useGameStore = create<GameStore>()(
         if (!session) return
         const player: Player = { id: nanoid(8), name: name.trim() }
         set({ session: { ...session, players: [...session.players, player] } })
+      },
+
+      removePlayer: (playerId) => {
+        const { session } = get()
+        if (!session) return
+        set({
+          session: {
+            ...session,
+            players: session.players.filter((p) => p.id !== playerId),
+            transactions: session.transactions.filter((t) => t.playerId !== playerId),
+          },
+        })
       },
 
       addBuyin: (playerId, amountCents) => {
@@ -123,6 +151,21 @@ export const useGameStore = create<GameStore>()(
         })
       },
 
+      setSessionDate: (timestamp) => {
+        const { session } = get()
+        if (!session) return
+        set({ session: { ...session, createdAt: timestamp } })
+      },
+
+      setHistoryDate: (sessionId, timestamp) => {
+        const { history } = get()
+        set({
+          history: history.map((s) =>
+            s.id === sessionId ? { ...s, createdAt: timestamp } : s
+          ),
+        })
+      },
+
       endGame: () => {
         const { session } = get()
         if (!session) return
@@ -149,13 +192,32 @@ export const useGameStore = create<GameStore>()(
         set({ paidMap: { ...paidMap, [index]: !paidMap[index] } })
       },
 
+      togglePaidInHistory: (sessionId, index) => {
+        const { history } = get()
+        set({
+          history: history.map((s) => {
+            if (s.id !== sessionId) return s
+            const current = s.paidMap ?? {}
+            return { ...s, paidMap: { ...current, [index]: !current[index] } }
+          }),
+        })
+      },
+
       newGame: () => {
-        const { session, history } = get()
+        const { session, history, paidMap } = get()
         const updatedHistory =
           session?.status === 'settled'
-            ? [session, ...history].slice(0, 10)
+            ? [{ ...session, paidMap: { ...paidMap } }, ...history].slice(0, 10)
             : history
-        set({ session: null, settlements: [], paidMap: {}, view: 'lobby', history: updatedHistory })
+        set({ session: null, settlements: [], paidMap: {}, view: 'home', history: updatedHistory })
+      },
+
+      seedDemoHistory: () => {
+        set({ history: buildSeedHistory(), view: 'home' })
+      },
+
+      clearAll: () => {
+        set({ session: null, settlements: [], paidMap: {}, history: [], view: 'home' })
       },
     }),
     {
